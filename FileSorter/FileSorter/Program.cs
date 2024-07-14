@@ -1,4 +1,5 @@
-﻿using System.CommandLine;
+﻿using System.Collections.Concurrent;
+using System.CommandLine;
 
 namespace FileSorter
 {
@@ -38,13 +39,22 @@ namespace FileSorter
                 description: "The path to the input file")
             { IsRequired = true };
             inputFileOption.AddAlias("-i");
+            
+            var workFolderOption = new Option<string>(
+                    name: "--workFolder",
+                    description: "The path to the work directory")
+                { IsRequired = true };
+            workFolderOption.AddAlias("-wf");
+
             sortCommand.AddOption(inputFileOption);
+            sortCommand.AddOption(workFolderOption);
             sortCommand.SetHandler(async context =>
             {
                 var inputPath = context.ParseResult.GetValueForOption(inputFileOption);
                 var outPath = context.ParseResult.GetValueForOption(outFileOption);
+                var workFolder = context.ParseResult.GetValueForOption(workFolderOption);
                 var token = context.GetCancellationToken();
-                returnCode = await SortFile(inputPath!, outPath!, token);
+                returnCode = await SortFile(inputPath!, outPath!, workFolder!, token);
             });
 
             rootCommand.AddCommand(createCommand);
@@ -83,35 +93,94 @@ namespace FileSorter
             return 0;
         }
 
-        private static async Task<int> SortFile(string input, string output, CancellationToken ct)
+        private static async Task<int> SortFile(string input, string output, string workFolder, CancellationToken ct)
         {
-            if (input == null) throw new ArgumentNullException(nameof(input));
-            if (output == null) throw new ArgumentNullException(nameof(output));
+            bool needToDeleteWorkFolder = false;
             try
             {
-                await Task.Delay(5000, ct);
+                needToDeleteWorkFolder = EnsureEmptyFolder(workFolder);
+                var sortedSegments = await SplitFileToSortedSegmentsAsync(workFolder, File.OpenRead(input), ct);
+                Console.WriteLine(sortedSegments.Count);
             }
             catch (OperationCanceledException)
             {
                 await Console.Error.WriteLineAsync("The operation was aborted");
+                await Clear(output);
                 return 1;
             }
+            catch (Exception ex)
+            {
+                await Console.Error.WriteLineAsync(ex.Message);
+                await Clear(output);
+                return -1;
+            }
+            finally
+            {
+                if (needToDeleteWorkFolder)
+                {
+                    await Clear(workFolder);
+                }
+            }
+
             Console.WriteLine($"File '{input}' sorted and saved to '{output}'.");
             return 0;
         }
 
-        private static async Task Clear(string fileToDelete)
+        private static async Task<List<string>> SplitFileToSortedSegmentsAsync(string workFolder, Stream sourceStream, CancellationToken ct)
+        {
+            int threadCount = Environment.ProcessorCount;
+            var unsortedSegmentsQueue = new BlockingCollection<UnsortedSegment>(boundedCapacity: threadCount);
+            var sortedFileNames = new BlockingCollection<string>();
+            var consumerTasks = new Task[threadCount];
+            var fileNumProvider = new FileNumberProvider();
+            for (int i = 0; i < threadCount; i++)
+            {
+                var consumerId = i;
+                UnsortedSegmentConsumer consumer = new UnsortedSegmentConsumer(unsortedSegmentsQueue, sortedFileNames, workFolder,
+                    "input", consumerId, fileNumProvider, new NumericTextComparator());
+                consumerTasks[i] = Task.Run(() => consumer.Consume(), ct);
+            }
+
+            var producer = new UnsortedSegmentProducer(unsortedSegmentsQueue, 2 * 1024 * 1024, sourceStream);
+            await producer.ProduceAsync(ct);
+            await Task.WhenAll(consumerTasks);
+            return sortedFileNames.ToList();
+        }
+
+        private static bool EnsureEmptyFolder(string workFolder)
+        {
+            if (Directory.Exists(workFolder))
+            {
+                if (Directory.GetFiles(workFolder).Length > 0 || Directory.GetDirectories(workFolder).Length > 0)
+                {
+                    throw new InvalidOperationException("The folder must be empty.");
+                }
+            }
+            else
+            {
+                Directory.CreateDirectory(workFolder);
+                return true;
+            }
+
+            return false;
+        }
+
+        private static async Task Clear(string pathToDelete)
         {
             try
             {
-                if (File.Exists(fileToDelete))
+                if (File.Exists(pathToDelete))
                 {
-                    File.Delete(fileToDelete);
+                    File.Delete(pathToDelete);
+                }
+                else if (Directory.Exists(pathToDelete))
+                {
+                    Directory.Delete(pathToDelete, true);
                 }
             }
-            catch (Exception)
+            catch (Exception ex)
             {
-                await Console.Error.WriteLineAsync($"Unable to delete file: {fileToDelete}");
+                await Console.Error.WriteLineAsync($"Unable to delete: {pathToDelete}. Error: {ex.Message}");
             }
         }
     }
