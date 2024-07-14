@@ -6,7 +6,7 @@
 
         public async Task Generate(Stream outStream, long maxSize, CancellationToken ct)
         {
-            await using var outputWriter = new StreamWriter(outStream);
+            await using var outputWriter = new StreamWriter(outStream, bufferSize: 65536);
             while (true)
             {
                 ct.ThrowIfCancellationRequested();

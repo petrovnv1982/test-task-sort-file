@@ -74,8 +74,15 @@ namespace FileSorter
 
             try
             {
+                Stopwatch watch = new Stopwatch();
+                watch.Start();
+                Console.WriteLine("Start generating text file");
                 RandomTextFileGenerator textFileGenerator = new RandomTextFileGenerator();
                 await textFileGenerator.Generate(File.OpenWrite(output), size * 1024L * 1024L, ct);
+                watch.Stop();
+                Console.WriteLine($"Test file '{output}' of size {size} MB generated in {watch.ElapsedMilliseconds} ms");
+                return 0;
+
             }
             catch (OperationCanceledException)
             {
@@ -89,9 +96,6 @@ namespace FileSorter
                 await Clear(output);
                 return -1;
             }
-
-            Console.WriteLine($"Test file '{output}' of size {size} MB generated.");
-            return 0;
         }
 
         private static async Task<int> SortFile(string input, string output, string workFolder, CancellationToken ct)
