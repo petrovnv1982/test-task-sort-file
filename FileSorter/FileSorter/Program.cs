@@ -100,7 +100,8 @@ namespace FileSorter
             {
                 needToDeleteWorkFolder = EnsureEmptyFolder(workFolder);
                 var sortedSegments = await SplitFileToSortedSegmentsAsync(workFolder, File.OpenRead(input), ct);
-                Console.WriteLine(sortedSegments.Count);
+                var merger = new SortedSegmentsMerger(new NumericTextComparator());
+                await merger.MergeAsync(sortedSegments, output, ct);
             }
             catch (OperationCanceledException)
             {
