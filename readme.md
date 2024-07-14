@@ -1,5 +1,5 @@
 # Text file sorter
-## Requirements
+### Requirements
 The input is a large text file, where each line is a Number. String
 For example:
 415. Apple
@@ -27,3 +27,13 @@ be used for testing.
 When evaluating the completed task, we will first look at the result (correctness of
 generation / sorting and running time), and secondly, at how the candidate writes the code.
 Programming language: C#.
+
+### Example command line arguments for file generation
+##### Generate file of size 10 GB
+create --output d:\sort\input.txt" --size 10240
+##### Generate file of size 1 GB
+create --output "d:\sort\input.txt" --size 1024
+
+### Example command line arguments for file sorting
+##### Generate file of size 10 GB
+sort --input "d:\sort\input.txt" --output "d:\sort\output.txt" --workFolder "d:\sort\temp"

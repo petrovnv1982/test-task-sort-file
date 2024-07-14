@@ -4,7 +4,7 @@
     {
         private readonly Random _random = new Random();
 
-        public async Task Generate(Stream outStream, int maxSize, CancellationToken ct)
+        public async Task Generate(Stream outStream, long maxSize, CancellationToken ct)
         {
             await using var outputWriter = new StreamWriter(outStream);
             while (true)

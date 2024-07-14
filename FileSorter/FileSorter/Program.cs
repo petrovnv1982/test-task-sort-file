@@ -1,5 +1,6 @@
 ﻿using System.Collections.Concurrent;
 using System.CommandLine;
+using System.Diagnostics;
 
 namespace FileSorter
 {
@@ -74,7 +75,7 @@ namespace FileSorter
             try
             {
                 RandomTextFileGenerator textFileGenerator = new RandomTextFileGenerator();
-                await textFileGenerator.Generate(File.OpenWrite(output), size * 1024 * 1024, ct);
+                await textFileGenerator.Generate(File.OpenWrite(output), size * 1024L * 1024L, ct);
             }
             catch (OperationCanceledException)
             {
@@ -99,9 +100,15 @@ namespace FileSorter
             try
             {
                 needToDeleteWorkFolder = EnsureEmptyFolder(workFolder);
+                Stopwatch watch = new Stopwatch();
+                watch.Start();
+                Console.WriteLine("Start splitting into sorted segments");
                 var sortedSegments = await SplitFileToSortedSegmentsAsync(workFolder, File.OpenRead(input), ct);
+                Console.WriteLine("Start merging sorted segments");
                 var merger = new SortedSegmentsMerger(new NumericTextComparator());
                 await merger.MergeAsync(sortedSegments, output, ct);
+                watch.Stop();
+                Console.WriteLine($"File has bee sorted in {watch.ElapsedMilliseconds} ms.");
             }
             catch (OperationCanceledException)
             {
