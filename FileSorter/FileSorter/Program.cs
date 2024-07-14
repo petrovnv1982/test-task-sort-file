@@ -55,15 +55,28 @@ namespace FileSorter
 
         private static async Task<int> CreateTestFile(string output, int size, CancellationToken ct)
         {
-            if (output == null) throw new ArgumentNullException(nameof(output));
+            if (size is < 1 or > 100 * 1024 * 2024)
+            {
+                await Console.Error.WriteLineAsync($"{nameof(size)} is out of range");
+                return -1;
+            }
+
             try
             {
-                await Task.Delay(5000, ct);
+                RandomTextFileGenerator textFileGenerator = new RandomTextFileGenerator();
+                await textFileGenerator.Generate(File.OpenWrite(output), size * 1024 * 1024, ct);
             }
             catch (OperationCanceledException)
             {
                 await Console.Error.WriteLineAsync("The operation was aborted");
+                await Clear(output);
                 return 1;
+            }
+            catch (Exception ex)
+            {
+                await Console.Error.WriteLineAsync(ex.Message);
+                await Clear(output);
+                return -1;
             }
 
             Console.WriteLine($"Test file '{output}' of size {size} MB generated.");
@@ -85,6 +98,21 @@ namespace FileSorter
             }
             Console.WriteLine($"File '{input}' sorted and saved to '{output}'.");
             return 0;
+        }
+
+        private static async Task Clear(string fileToDelete)
+        {
+            try
+            {
+                if (File.Exists(fileToDelete))
+                {
+                    File.Delete(fileToDelete);
+                }
+            }
+            catch (Exception)
+            {
+                await Console.Error.WriteLineAsync($"Unable to delete file: {fileToDelete}");
+            }
         }
     }
 }
